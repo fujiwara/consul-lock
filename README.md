@@ -1,10 +1,14 @@
-# go-redis-setlock
+# consul-lock
 
 Like the setlock command using Consul session/kv.
 
 ## Repository
 
 [github.com/fujiwara/consul-lock](https://github.com/fujiwara/consul-lock)
+
+## Binary releases
+
+[github.com/fujiwara/consul-lock/releases](https://github.com/fujiwara/consul-lock/releases)
 
 ## Build & Install
 
