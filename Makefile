@@ -1,7 +1,7 @@
 GIT_VER := $(shell git describe --tags)
 
 build:
-	go get github.com/fujiwara/consul-lock
+	go get -ldflags "-X main.Version ${GIT_VER}" github.com/fujiwara/consul-lock
 
 binary:
 	gox -os="linux darwin windows" -arch="amd64 386" -output "pkg/{{.Dir}}-${GIT_VER}-{{.OS}}-{{.Arch}}" -ldflags "-X main.Version ${GIT_VER}"

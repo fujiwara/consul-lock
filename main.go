@@ -21,6 +21,7 @@ const (
 )
 
 var Version string
+var DEBUG = false
 
 var TrapSignals = []os.Signal{
 	syscall.SIGHUP,
@@ -50,6 +51,9 @@ type Session struct {
 }
 
 func main() {
+	if v := os.Getenv("DEBUG"); v != "" {
+		DEBUG = true
+	}
 	code := run()
 	os.Exit(code)
 }
@@ -119,6 +123,12 @@ func run() int {
 	}
 }
 
+func debug(args ...interface{}) {
+	if DEBUG {
+		log.Println(args...)
+	}
+}
+
 func tryGetLock(client *http.Client, opt *Options, key string) (sessionID string, err error) {
 	var index int64
 	for {
@@ -134,14 +144,14 @@ func tryGetLock(client *http.Client, opt *Options, key string) (sessionID string
 		}
 		if newIndex != NoIndex {
 			index = newIndex
-			log.Println("new index", index)
+			debug("new index", index)
 		}
 		try := false
 		if res.StatusCode == http.StatusOK {
 			if len(kvrs) == 0 {
 				return "", fmt.Errorf("invalid response /v1/kv/%s", key)
 			}
-			log.Printf("%#v", kvrs)
+			debug(fmt.Sprintf("%#v", kvrs))
 			kvr := kvrs[0]
 			if kvr.Session == "" {
 				try = true
@@ -162,7 +172,7 @@ func tryGetLock(client *http.Client, opt *Options, key string) (sessionID string
 		if res.StatusCode != http.StatusOK {
 			return "", fmt.Errorf("invalid status")
 		}
-		log.Println("sessionID", session.ID)
+		debug("sessionID", session.ID)
 		body := strings.NewReader(key)
 		req, _ = http.NewRequest("PUT", "http://localhost:8500/v1/kv/locks/"+key+"?acquire="+session.ID, body)
 		var ok bool
@@ -182,7 +192,7 @@ func tryGetLock(client *http.Client, opt *Options, key string) (sessionID string
 }
 
 func callAPI(client *http.Client, req *http.Request, result interface{}) (*http.Response, int64, error) {
-	log.Println("callAPI", req.Method, req.URL)
+	debug("callAPI", req.Method, req.URL)
 	res, err := client.Do(req)
 	if err != nil {
 		return res, NoIndex, err
