@@ -122,7 +122,7 @@ func run() int {
 func tryGetLock(client *http.Client, opt *Options, key string) (sessionID string, err error) {
 	var index int64
 	for {
-		url := "http://localhost:8500/v1/kv/locks" + key
+		url := "http://localhost:8500/v1/kv/locks/" + key
 		if index > 0 {
 			url = url + fmt.Sprintf("?wait=10s&index=%d", index)
 		}
@@ -201,15 +201,18 @@ func callAPI(client *http.Client, req *http.Request, result interface{}) (*http.
 }
 
 func releaseLock(client *http.Client, opt *Options, key string, sessionID string) error {
-	//	req, _ := http.NewRequest("PUT", "http://localhost:8500/v1/kv/"+key+"?release="+sessionID, nil)
-	req, _ := http.NewRequest("DELETE", "http://localhost:8500/v1/kv/locks/"+key, nil)
-	var ok bool
-	res, _, err := callAPI(client, req, &ok)
-	if err != nil {
-		return err
-	}
-	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("invalid status")
+	reqDestroySession, _ := http.NewRequest("PUT", "http://localhost:8500/v1/session/destroy/"+key, nil)
+	reqDeleteKV, _ := http.NewRequest("DELETE", "http://localhost:8500/v1/kv/locks/"+key, nil)
+	reqs := []*http.Request{reqDestroySession, reqDeleteKV}
+	for _, req := range reqs {
+		var ok bool
+		res, _, err := callAPI(client, req, &ok)
+		if err != nil {
+			return err
+		}
+		if res.StatusCode != http.StatusOK {
+			return fmt.Errorf("invalid status")
+		}
 	}
 	return nil
 }
