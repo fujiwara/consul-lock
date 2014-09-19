@@ -211,7 +211,7 @@ func callAPI(client *http.Client, req *http.Request, result interface{}) (*http.
 }
 
 func releaseLock(client *http.Client, opt *Options, key string, sessionID string) error {
-	reqDestroySession, _ := http.NewRequest("PUT", "http://localhost:8500/v1/session/destroy/"+key, nil)
+	reqDestroySession, _ := http.NewRequest("PUT", "http://localhost:8500/v1/session/destroy/"+sessionID, nil)
 	reqDeleteKV, _ := http.NewRequest("DELETE", "http://localhost:8500/v1/kv/locks/"+key, nil)
 	reqs := []*http.Request{reqDestroySession, reqDeleteKV}
 	for _, req := range reqs {
