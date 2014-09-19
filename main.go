@@ -66,10 +66,10 @@ func parseOptions() (opt *Options, key string, program string, args []string) {
 	var exitNonZero bool
 
 	flag.Usage = usage
-	flag.BoolVar(&noDelay, "n", false, "No delay. If KEY is locked by another process, go-redis-setlock gives up.")
-	flag.BoolVar(&delay, "N", true, "(Default.) Delay. If KEY is locked by another process, go-redis-setlock waits until it can obtain a new lock.")
-	flag.BoolVar(&exitZero, "x", false, "If KEY is locked, go-redis-setlock exits zero.")
-	flag.BoolVar(&exitNonZero, "X", true, "(Default.) If KEY is locked, go-redis-setlock prints an error message and exits nonzero.")
+	flag.BoolVar(&noDelay, "n", false, "No delay. If KEY is locked by another process, consul-lock gives up.")
+	flag.BoolVar(&delay, "N", true, "(Default.) Delay. If KEY is locked by another process, consul-lock waits until it can obtain a new lock.")
+	flag.BoolVar(&exitZero, "x", false, "If KEY is locked, consul-lock exits zero.")
+	flag.BoolVar(&exitNonZero, "X", true, "(Default.) If KEY is locked, consul-lock prints an error message and exits nonzero.")
 	flag.BoolVar(&showVersion, "version", false, fmt.Sprintf("version %s", Version))
 	flag.Parse()
 
