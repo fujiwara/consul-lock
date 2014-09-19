@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -11,13 +12,13 @@ import (
 	"os/exec"
 	"os/signal"
 	"strconv"
-	"strings"
 	"syscall"
 )
 
 const (
-	ExitCodeError = 111
-	NoIndex       = int64(-1)
+	ExitCodeError    = 111
+	NoIndex          = int64(-1)
+	DefaultLockDelay = int64(15)
 )
 
 var Version string
@@ -30,8 +31,9 @@ var TrapSignals = []os.Signal{
 	syscall.SIGQUIT}
 
 type Options struct {
-	Wait     bool
-	ExitCode int
+	LockDelay int64
+	Blocking  bool
+	ExitCode  int
 }
 
 type KVResult struct {
@@ -46,8 +48,18 @@ type KVResult struct {
 
 type KVResults []KVResult
 
+type SessionRequest struct {
+	LockDelay int64
+	Name      string
+}
+
 type Session struct {
-	ID string
+	ID          string
+	Name        string
+	Node        string
+	CreateIndex int64
+	Checks      []string
+	LockDelay   int64
 }
 
 func main() {
@@ -64,6 +76,7 @@ func parseOptions() (opt *Options, key string, program string, args []string) {
 	var delay bool
 	var exitZero bool
 	var exitNonZero bool
+	var lockDelay int64
 
 	flag.Usage = usage
 	flag.BoolVar(&noDelay, "n", false, "No delay. If KEY is locked by another process, consul-lock gives up.")
@@ -71,6 +84,7 @@ func parseOptions() (opt *Options, key string, program string, args []string) {
 	flag.BoolVar(&exitZero, "x", false, "If KEY is locked, consul-lock exits zero.")
 	flag.BoolVar(&exitNonZero, "X", true, "(Default.) If KEY is locked, consul-lock prints an error message and exits nonzero.")
 	flag.BoolVar(&showVersion, "version", false, fmt.Sprintf("version %s", Version))
+	flag.Int64Var(&lockDelay, "lock-delay", DefaultLockDelay, "Consul session LockDelay seconds")
 	flag.Parse()
 
 	if showVersion {
@@ -79,11 +93,12 @@ func parseOptions() (opt *Options, key string, program string, args []string) {
 	}
 
 	opt = &Options{
-		Wait:     true,
-		ExitCode: ExitCodeError,
+		Blocking:  true,
+		ExitCode:  ExitCodeError,
+		LockDelay: lockDelay,
 	}
 	if noDelay {
-		opt.Wait = false
+		opt.Blocking = false
 	}
 	if exitZero {
 		opt.ExitCode = 0
@@ -112,9 +127,10 @@ func usage() {
 func run() int {
 	opt, key, program, args := parseOptions()
 	client := &http.Client{}
+
 	sessionID, err := tryGetLock(client, opt, key)
 	if err == nil {
-		defer releaseLock(client, opt, key, sessionID)
+		defer releaseLock(client, key, sessionID)
 		code := invokeCommand(program, args)
 		return code
 	} else {
@@ -159,11 +175,22 @@ func tryGetLock(client *http.Client, opt *Options, key string) (sessionID string
 		} else if res.StatusCode == http.StatusNotFound {
 			try = true
 		}
+		if !opt.Blocking && !try {
+			return "", fmt.Errorf("unable to lock")
+		}
 		if !try {
 			continue
 		}
 		// not locked. try get lock
-		req, _ = http.NewRequest("PUT", "http://localhost:8500/v1/session/create", nil)
+
+		// create session
+		b, _ := json.Marshal(&SessionRequest{
+			LockDelay: opt.LockDelay,
+			Name:      "lock-for-" + key,
+		})
+		debug("session request body", string(b))
+		body := bytes.NewReader(b)
+		req, _ = http.NewRequest("PUT", "http://localhost:8500/v1/session/create", body)
 		var session Session
 		res, _, err = callAPI(client, req, &session)
 		if err != nil {
@@ -172,9 +199,10 @@ func tryGetLock(client *http.Client, opt *Options, key string) (sessionID string
 		if res.StatusCode != http.StatusOK {
 			return "", fmt.Errorf("invalid status")
 		}
-		debug("sessionID", session.ID)
-		body := strings.NewReader(key)
-		req, _ = http.NewRequest("PUT", "http://localhost:8500/v1/kv/locks/"+key+"?acquire="+session.ID, body)
+		debug("session", fmt.Sprintf("%#v", session))
+
+		// lock kv
+		req, _ = http.NewRequest("PUT", "http://localhost:8500/v1/kv/locks/"+key+"?acquire="+session.ID, nil)
 		var ok bool
 		res, _, err = callAPI(client, req, &ok)
 		if err != nil {
@@ -185,7 +213,11 @@ func tryGetLock(client *http.Client, opt *Options, key string) (sessionID string
 		}
 		if ok {
 			return session.ID, nil
-		} else if !opt.Wait {
+		}
+		// can't get lock, remove session
+		reqDestroySession, _ := http.NewRequest("PUT", "http://localhost:8500/v1/session/destroy/"+sessionID, nil)
+		callAPI(client, reqDestroySession, &ok)
+		if !opt.Blocking {
 			return "", fmt.Errorf("unable to lock")
 		}
 	}
@@ -210,7 +242,7 @@ func callAPI(client *http.Client, req *http.Request, result interface{}) (*http.
 	return res, NoIndex, nil
 }
 
-func releaseLock(client *http.Client, opt *Options, key string, sessionID string) error {
+func releaseLock(client *http.Client, key string, sessionID string) error {
 	reqDestroySession, _ := http.NewRequest("PUT", "http://localhost:8500/v1/session/destroy/"+sessionID, nil)
 	reqDeleteKV, _ := http.NewRequest("DELETE", "http://localhost:8500/v1/kv/locks/"+key, nil)
 	reqs := []*http.Request{reqDestroySession, reqDeleteKV}
