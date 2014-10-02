@@ -24,6 +24,7 @@ Install to $GOPATH.
     -N: (Default.) Delay. If KEY is locked by another process, consul-lock waits until it can obtain a new lock.
     -x: If KEY is locked, consul-lock exits zero.
     -X: (Default.) If KEY is locked, consul-lock prints an error message and exits nonzero.
+   -lock-delay=15: Consul session LockDelay seconds
 
 ## LICENSE
 
