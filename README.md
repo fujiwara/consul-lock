@@ -2,6 +2,10 @@
 
 Like the setlock command using Consul session/kv.
 
+This is a conceptual code, not for a production use.
+
+Now, [Consul 0.5](https://hashicorp.com/blog/consul-0-5.html) provides `lock` command. I recommend use it.
+
 ## Repository
 
 [github.com/fujiwara/consul-lock](https://github.com/fujiwara/consul-lock)
